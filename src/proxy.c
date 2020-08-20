@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <ev.h>
 
 
@@ -19,9 +21,12 @@ void proxy_flow_update(int dir,char *data,int len) {
     }
 }
 
-oxo_proxy* proxy_new() {
+oxo_proxy* proxy_new(int local_port,int remote_port) {
     oxo_proxy* p = malloc(sizeof(oxo_proxy));
     bzero(p,sizeof(oxo_proxy));
+    p->local_port = local_port;
+    p->remote_port = remote_port;
+    p->diagnose_port = 0;
     p->status = 0;
     p->update_handler = proxy_flow_update;
 
@@ -111,6 +116,79 @@ static unsigned int _proxy_buffer_out(oxo_proxy *p,int is_lr,char *data,unsigned
         p->rl_count -= copied;
     }
     return copied;
+}
+
+void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
+    struct sockaddr_in addr;
+    socklen_t addr_len;
+    int s,flags;
+    oxo_proxy *p = (oxo_proxy*)watcher;
+
+    if (revents & EV_ERROR) {
+        perror("error happened");
+        return;
+    }
+    if (revents & EV_READ) {
+        puts("accepting...");
+        s = accept(watcher->fd,(struct sockaddr*)&addr,&addr_len);
+
+        if (s < 0) {
+            perror("accept error");
+            return;
+        }
+        flags = fcntl(s,F_GETFD);
+        flags |= O_NONBLOCK;
+        fcntl(s,F_SETFD, flags);
+
+        p->status = PROXY_STATUS_LEFT_CONNECTED;
+        p->left_read_watcher = watcher_new(p);
+        p->left_write_watcher = watcher_new(p);
+        p->right_read_watcher = watcher_new(p);
+        p->right_write_watcher = watcher_new(p);
+        ev_io_init((ev_io*)p->left_read_watcher, wh_left_read_handler, s,EV_READ);
+        ev_io_init((ev_io*)p->left_write_watcher, wh_left_write_handler, s, EV_WRITE);
+        proxy_event_enable(p, PROXY_FLAG_LEFT_READ);
+    }
+}
+
+
+int proxy_start(oxo_proxy *p)
+{
+    int s,option;
+    struct sockaddr_in addr;
+    ev_io watcher_accept;
+    struct ev_loop *loop = EV_DEFAULT;
+
+    s = socket(AF_INET,SOCK_STREAM,0);
+    bzero(&addr,sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(p->local_port);
+
+    if (setsockopt(s, SOL_SOCKET, (SO_REUSEADDR | SO_REUSEPORT), (char*)&option, sizeof(option)) < 0) {
+        perror("setsockopt failed");
+        close(s);
+        return -1;
+    }
+    if (bind(s,(struct sockaddr*)&addr,sizeof(addr)) == -1) {
+        perror("bind failed");
+        close(s);
+        return -1;
+    }
+
+    if(listen(s,-1) == -1) {
+        perror("listen failed");
+        close(s);
+        return -1;
+    }
+
+    ev_io_init(&watcher_accept, proxy_accpet_cb, s, EV_READ | EV_WRITE);
+    ev_io_start(loop, &watcher_accept);
+
+    ev_loop(loop,0);
+
+    puts("ev_loop done");
+
 }
 
 int proxy_buffer_lr_remain(oxo_proxy *p)

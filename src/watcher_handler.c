@@ -34,7 +34,7 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
         bzero(&addr,sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        addr.sin_port = htons(6666);
+        addr.sin_port = htons(p->remote_port);
         puts("connecting right");
         if (connect(s,(struct sockaddr*)&addr,sizeof(addr)) != 0) {
             perror("connect to remote failed");

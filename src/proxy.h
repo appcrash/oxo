@@ -17,6 +17,11 @@ typedef void (*proxy_update_handler_t)(int dir,char *data,int len);
 struct oxo_proxy_watcher;
 
 typedef struct oxo_proxy {
+    int local_port;
+    int remote_port;
+
+    int diagnose_port;
+
     struct oxo_proxy_watcher *left_read_watcher;
     struct oxo_proxy_watcher *left_write_watcher;
     struct oxo_proxy_watcher *right_read_watcher;
@@ -34,7 +39,8 @@ typedef struct oxo_proxy {
 
 } oxo_proxy;
 
-oxo_proxy* proxy_new();
+oxo_proxy* proxy_new(int local_port,int remote_port);
+int proxy_start(oxo_proxy *p);
 void proxy_flow_update(int dir,char *data,int len);
 int proxy_buffer_lr_remain(oxo_proxy *p);
 int proxy_buffer_rl_remain(oxo_proxy *p);
