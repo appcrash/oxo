@@ -2,8 +2,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <ev.h>
-
 #include "common.h"
 #include "proxy.h"
 
@@ -54,11 +52,14 @@ int main(int argc,char **argv) {
     if (parse_args(argc, argv) < 0) {
         exit(-1);
     }
-    p = proxy_new(local_port, remote_port);
     if (diagnose_port > 0) {
-        p->diagnose_port = diagnose_port;
+        if(diagnose_init(diagnose_port) < 0) {
+            exit(-1);
+        }
     }
 
+    p = proxy_new(local_port, remote_port);
+    p->diagnose = (diagnose_port > 0) ? 1 : 0;
     proxy_start(p);
     return 0;
 }

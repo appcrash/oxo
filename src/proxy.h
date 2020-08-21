@@ -20,7 +20,7 @@ typedef struct oxo_proxy {
     int local_port;
     int remote_port;
 
-    int diagnose_port;
+    char diagnose;
 
     struct oxo_proxy_watcher *left_read_watcher;
     struct oxo_proxy_watcher *left_write_watcher;

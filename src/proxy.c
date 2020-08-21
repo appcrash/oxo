@@ -4,7 +4,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <fcntl.h>
 #include <ev.h>
 
 
@@ -26,7 +25,7 @@ oxo_proxy* proxy_new(int local_port,int remote_port) {
     bzero(p,sizeof(oxo_proxy));
     p->local_port = local_port;
     p->remote_port = remote_port;
-    p->diagnose_port = 0;
+    p->diagnose = 0;
     p->status = 0;
     p->update_handler = proxy_flow_update;
 
@@ -121,7 +120,7 @@ static unsigned int _proxy_buffer_out(oxo_proxy *p,int is_lr,char *data,unsigned
 void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
     struct sockaddr_in addr;
     socklen_t addr_len;
-    int s,flags;
+    int s;
     oxo_proxy *p = (oxo_proxy*)watcher;
 
     if (revents & EV_ERROR) {
@@ -136,9 +135,11 @@ void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
             perror("accept error");
             return;
         }
-        flags = fcntl(s,F_GETFD);
-        flags |= O_NONBLOCK;
-        fcntl(s,F_SETFD, flags);
+        if (p->diagnose) {
+            diagnose_log("proxy", "accept");
+        }
+
+        set_socket_nonblock(s);
 
         p->status = PROXY_STATUS_LEFT_CONNECTED;
         p->left_read_watcher = watcher_new(p);
@@ -154,7 +155,7 @@ void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
 
 int proxy_start(oxo_proxy *p)
 {
-    int s,option;
+    int s;
     struct sockaddr_in addr;
     ev_io watcher_accept;
     struct ev_loop *loop = EV_DEFAULT;
@@ -165,13 +166,9 @@ int proxy_start(oxo_proxy *p)
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(p->local_port);
 
-    if (setsockopt(s, SOL_SOCKET, (SO_REUSEADDR | SO_REUSEPORT), (char*)&option, sizeof(option)) < 0) {
-        perror("setsockopt failed");
-        close(s);
-        return -1;
-    }
+    set_socket_reuse(s);
     if (bind(s,(struct sockaddr*)&addr,sizeof(addr)) == -1) {
-        perror("bind failed");
+        perror("proxy_start bind failed");
         close(s);
         return -1;
     }
@@ -188,7 +185,7 @@ int proxy_start(oxo_proxy *p)
     ev_loop(loop,0);
 
     puts("ev_loop done");
-
+    return 0;
 }
 
 int proxy_buffer_lr_remain(oxo_proxy *p)
