@@ -13,7 +13,7 @@ void set_socket_nonblock(int s)
 void set_socket_reuse(int s)
 {
     int option;
-    if (setsockopt(s, SOL_SOCKET, (SO_REUSEADDR | SO_REUSEPORT), (char*)&option, sizeof(option)) < 0) {
-        perror("setsockopt failed");
+    if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char*)&option, sizeof(option)) < 0) {
+        perror("setsockopt reuse failed");
     }
 }
