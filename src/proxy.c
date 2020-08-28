@@ -121,7 +121,7 @@ void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
     struct sockaddr_in addr;
     socklen_t addr_len;
     int s;
-    oxo_proxy *p = (oxo_proxy*)watcher;
+    oxo_proxy *p = IO_PROXY(watcher);
 
     if (revents & EV_ERROR) {
         perror("error happened");
@@ -157,7 +157,7 @@ int proxy_start(oxo_proxy *p)
 {
     int s;
     struct sockaddr_in addr;
-    ev_io watcher_accept;
+    oxo_proxy_watcher watcher_accept;
     struct ev_loop *loop = EV_DEFAULT;
 
     s = socket(AF_INET,SOCK_STREAM,0);
@@ -179,8 +179,9 @@ int proxy_start(oxo_proxy *p)
         return -1;
     }
 
-    ev_io_init(&watcher_accept, proxy_accpet_cb, s, EV_READ | EV_WRITE);
-    ev_io_start(loop, &watcher_accept);
+    watcher_accept.proxy = p;
+    ev_io_init((ev_io*)&watcher_accept, proxy_accpet_cb, s, EV_READ | EV_WRITE);
+    ev_io_start(loop, (ev_io*)&watcher_accept);
 
     ev_loop(loop,0);
 

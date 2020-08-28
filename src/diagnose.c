@@ -17,7 +17,7 @@ static struct sockaddr_in daddr;
 
 int diagnose_init(int dst)
 {
-    const char init[] = "init";
+    const char init[] = "init\n";
 
     dskt = socket(AF_INET, SOCK_DGRAM, 0);
     if (dskt < 0) {
@@ -45,7 +45,7 @@ void diagnose_log(char *type,char *data)
 {
     int len;
     char buff[1024];
-    len = snprintf(buff, 1024, "%s %s", type,data);
+    len = snprintf(buff, 1024, "%s %s\n", type,data);
 
     /* TODO: use libev to handle EAGAIN */
     if(sendto(dskt,buff,len,0,

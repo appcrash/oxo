@@ -10,7 +10,6 @@
 #include "proxy.h"
 
 
-#define IO_PROXY(p_io) ((oxo_proxy_watcher*)p_io)->proxy
 
 
 oxo_proxy_watcher* watcher_new(oxo_proxy *p)

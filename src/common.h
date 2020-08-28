@@ -8,6 +8,8 @@ typedef struct oxo_proxy_watcher
     struct oxo_proxy *proxy;
 } oxo_proxy_watcher;
 
+#define IO_PROXY(p_io) ((oxo_proxy_watcher*)p_io)->proxy
+
 
 void wh_left_read_handler(EV_P_ ev_io *watcher,int revents);
 void wh_left_write_handler(EV_P_ ev_io *watcher,int revents);
