@@ -121,7 +121,7 @@ void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
     struct sockaddr_in addr;
     socklen_t addr_len;
     int s;
-    oxo_proxy *p = IO_PROXY(watcher);
+    oxo_proxy *p = OXO_PROXY(watcher);
 
     if (revents & EV_ERROR) {
         perror("error happened");
@@ -135,9 +135,7 @@ void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
             perror("accept error");
             return;
         }
-        if (p->diagnose) {
-            diagnose_log("proxy", "accept");
-        }
+        D_PROXY(p, "accept");
 
         set_socket_nonblock(s);
 

@@ -5,9 +5,9 @@
 void set_socket_nonblock(int s)
 {
     int flags;
-    flags = fcntl(s,F_GETFD);
+    flags = fcntl(s,F_GETFL);
     flags |= O_NONBLOCK;
-    fcntl(s,F_SETFD, flags);
+    fcntl(s,F_SETFL, flags);
 }
 
 void set_socket_reuse(int s)

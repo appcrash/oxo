@@ -39,6 +39,13 @@ typedef struct oxo_proxy {
 
 } oxo_proxy;
 
+typedef struct oxo_connect
+{
+    struct oxo_proxy *proxy;
+    struct sockaddr *addr;
+} oxo_connect;
+
+
 oxo_proxy* proxy_new(int local_port,int remote_port);
 int proxy_start(oxo_proxy *p);
 void proxy_flow_update(int dir,char *data,int len);

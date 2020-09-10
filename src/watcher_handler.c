@@ -19,40 +19,47 @@ oxo_proxy_watcher* watcher_new(oxo_proxy *p)
     return watcher;
 }
 
+int wh_connect_host_callback(void *data)
+{
+    oxo_connect *conn = (oxo_connect*)data;
+
+}
 
 void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
 {
     struct sockaddr_in addr;
     int s,n;
     char buff[PROXY_BUFFER_SIZE];
-    oxo_proxy *p = IO_PROXY(watcher);
+    oxo_proxy *p = OXO_PROXY(watcher);
 
     if (PROXY_STATUS_LEFT_CONNECTED == p->status) {
-        // left connected in the first place
+        /* left connected in the first place
+         * stop left watcher until right is connected */
+        proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
         s = socket(AF_INET,SOCK_STREAM,0);
-        bzero(&addr,sizeof(addr));
-        addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-        addr.sin_port = htons(p->remote_port);
-        puts("connecting right");
-        if (connect(s,(struct sockaddr*)&addr,sizeof(addr)) != 0) {
-            perror("connect to remote failed");
-            close(s);
-            return;
-        }
-
         ev_io_init((ev_io*)p->right_read_watcher,wh_right_read_handler,s,EV_READ);
         ev_io_init((ev_io*)p->right_write_watcher,wh_right_write_handler,s,EV_WRITE);
+        bzero(&addr,sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = inet_addr("8.8.8.8");
+        addr.sin_port = htons(p->remote_port);
+        set_socket_nonblock(s);
+
+        puts("connecting right");
+        D_PROXY(p, "connect");
+        /* add timeout and retry, connect would return -1 as non-block socket */
+        connect(s,(struct sockaddr*)&addr,sizeof(addr));
+
         p->status = PROXY_STATUS_RIGHT_CONNECTING;
         proxy_event_enable(p,PROXY_FLAG_RIGHT_READ);
         proxy_event_enable(p,PROXY_FLAG_RIGHT_WRITE);
-        // stop left watcher until right is connected
-        proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
     } else if (PROXY_STATUS_RIGHT_CONNECTING == p->status) {
         puts("error: should not come here when status is right connecting");
+        D_PROXY(p, "error premature right connecting");
     } else if (PROXY_STATUS_RIGHT_CONNECTED == p->status) {
         int remain = proxy_buffer_lr_remain(p);
         if (0 == remain) {
+            /* buffer is full */
             return;
         }
 
@@ -78,7 +85,7 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
 
 void wh_left_write_handler(EV_P_ ev_io *watcher,int revents)
 {
-    oxo_proxy *p = IO_PROXY(watcher);
+    oxo_proxy *p = OXO_PROXY(watcher);
     int pending,n,i = 0;
     char buff[PROXY_BUFFER_SIZE];
 
@@ -118,7 +125,11 @@ void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
 {
     int n,remain;
     char buff[PROXY_BUFFER_SIZE];
-    oxo_proxy *p = IO_PROXY(watcher);
+    oxo_proxy *p = OXO_PROXY(watcher);
+
+    if (revents & EV_ERROR) {
+        puts("wh_right_read_handler got ev_error");
+    }
 
     if (p->status == PROXY_STATUS_RIGHT_CONNECTING) {
         // notify left to read data in
@@ -154,12 +165,16 @@ void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
 
 void wh_right_write_handler(EV_P_ ev_io *watcher,int revents)
 {
-    oxo_proxy *p = IO_PROXY(watcher);
+    oxo_proxy *p = OXO_PROXY(watcher);
     int pending,n,i = 0;
     char buff[PROXY_BUFFER_SIZE];
 
+    if (revents & EV_ERROR) {
+        puts("wh_right_write_handler got ev_error");
+    }
+
     if (p->status == PROXY_STATUS_RIGHT_CONNECTING) {
-        // notify left to read data in
+        /* notify left to read data in */
         puts("notify left to read data");
         proxy_event_enable(p, PROXY_FLAG_LEFT_READ);
         p->status = PROXY_STATUS_RIGHT_CONNECTED;

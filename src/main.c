@@ -38,7 +38,7 @@ int parse_args(int argc,char **argv)
         puts("invalid remote port argument");
         return -1;
     }
-    if (diagnose_port <= 0) {
+    if (diagnose_port < 0) {
         puts("invalid diagnose port argument");
         return -1;
     }
