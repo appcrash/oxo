@@ -18,6 +18,15 @@ set(SOURCES
   watcher_handler.c
   circular_buffer.c
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+    list(APPEND SOURCES io_epoll.c)
+elseif(CMAKE_SYSTEM_NAME STREQUAL FreeBSD OR CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    list(APPEND SOURCES io_kqueue.c)
+else()
+    message(FATAL_ERROR "this OS is not supported")
+endif()
+
 list(TRANSFORM SOURCES PREPEND "src/")
 
 add_executable(oxo ${SOURCES})
