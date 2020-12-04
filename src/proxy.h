@@ -19,6 +19,8 @@ struct oxo_proxy_watcher;
 typedef struct oxo_proxy {
     int local_port;
     int remote_port;
+    int left_socket;
+    int right_socket;
 
     char diagnose;
 

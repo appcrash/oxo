@@ -3,17 +3,17 @@
 #include "proxy.h"
 
 
-
-
 static void _proxy_timer_cb(EV_P_ ev_timer *w,int revents)
 {
     oxo_timer *timer = (oxo_timer*)w;
     timer_callback_t cb = timer->cb;
     if (!cb(timer->data)) {
         /* non-zero means repeat needed,
-         * zero means oneshot timer callback finished */
+         * zero means timer should be finished */
         ev_timer_stop(EV_A, w);
         timer_destroy(timer);
+    } else {
+        ev_timer_again(EV_A, w);
     }
 }
 
@@ -32,9 +32,9 @@ void timer_destroy(oxo_timer *timer)
     free(timer);
 }
 
-void timer_oneshot(oxo_timer *timer,double after,timer_callback_t cb)
+void timer_start(oxo_timer *timer,double repeat,timer_callback_t cb)
 {
     timer->cb = cb;
-    ev_timer_init((ev_timer*)timer, _proxy_timer_cb, after, after);
+    ev_timer_init((ev_timer*)timer, _proxy_timer_cb, 0., repeat);
     ev_timer_start(EV_DEFAULT, (ev_timer*)timer);
 }

@@ -1,5 +1,8 @@
 #include <ev.h>
 
+//#define MIN(x,y) ((x < y) ? x : y)
+//#define MAX(x,y) ((x > y) ? x : y)
+
 struct oxo_proxy;
 
 typedef struct oxo_proxy_watcher
@@ -9,6 +12,7 @@ typedef struct oxo_proxy_watcher
 } oxo_proxy_watcher;
 
 #define OXO_PROXY(p_io) ((oxo_proxy_watcher*)p_io)->proxy
+
 
 
 void wh_left_read_handler(EV_P_ ev_io *watcher,int revents);
@@ -30,8 +34,7 @@ void diagnose_log(char *type,char *data);
     }
 
 
-//void timer_period(double after,double repeat);
-
+/* callback return non-zero means repeat needed otherwise oneshot */
 typedef int (*timer_callback_t)(void*);
 typedef struct oxo_timer
 {
@@ -43,4 +46,4 @@ typedef struct oxo_timer
 
 oxo_timer *timer_new(void *data);
 void timer_destroy(oxo_timer *timer);
-void timer_oneshot(oxo_timer *timer,double after,timer_callback_t cb);
+void timer_start(oxo_timer *timer,double after,timer_callback_t cb);

@@ -32,15 +32,12 @@ class TestPeer():
 
     def tcp_listen_loop(self):
         while True:
-            s = self.tcp_socket.accept()
+            s,_ = self.tcp_socket.accept()
             if self.on_tcp_socket is not None:
+                threading.Thread(target=lambda: self.on_tcp_socket(s)).start()
                 self.on_tcp_socket(s)
             else:
                 s.close()
-
-    def get_debug_data(self):
-        return self.queue.get()
-
 
 class Proxy():
     def __init__(self,local_port,remote_port,debug_port):
@@ -62,8 +59,20 @@ class Proxy():
         self.process = subprocess.Popen(cmd,stdout=DEVNULL,stderr=DEVNULL)
 
 def main():
-    TestPeer(2222,5555).start()
+    def tcp_handler(s):
+        while True:
+            data = s.recv(1024)
+            if data == b'':
+                s.close()
+                break
+
+    peer = TestPeer(2222,5555)
+    peer.on_tcp_socket = tcp_handler
+    peer.start()
     Proxy(1111,2222,5555).start()
+
+    while True:
+        print(peer.udp_queue.get())
 
 if __name__ == '__main__':
     main()

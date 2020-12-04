@@ -9,7 +9,17 @@ if(NOT LIBEV)
   message(FATAL_ERROR "libev library not found")
 endif()
 
-file(GLOB SOURCES "src/*.c")
+set(SOURCES
+  main.c
+  diagnose.c
+  proxy.c
+  proxy_timer.c
+  util.c
+  watcher_handler.c
+  circular_buffer.c
+)
+list(TRANSFORM SOURCES PREPEND "src/")
+
 add_executable(oxo ${SOURCES})
 
 target_include_directories(oxo PUBLIC include "/usr/local/include" "/usr/include")
