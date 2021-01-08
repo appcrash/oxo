@@ -13,8 +13,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: install-dependencies
-      run: sudo apt-get update && sudo apt-get install -y libev-dev
     - name: configure
       run: cmake -B build
     - name: make
@@ -26,8 +24,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: install-dependencies
-      run: brew install libev
     - name: configure
       run: cmake -B build
     - name: make

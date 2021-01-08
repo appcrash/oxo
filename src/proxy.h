@@ -1,3 +1,5 @@
+#pragma once
+
 struct io_data;
 
 #define PROXY_DIR_LEFT_RIGHT 1
