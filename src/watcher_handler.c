@@ -9,7 +9,7 @@
 
 #include "common.h"
 #include "proxy.h"
-
+#include "io.h"
 
 oxo_proxy_watcher* watcher_new(oxo_proxy *p)
 {
@@ -25,18 +25,23 @@ oxo_proxy_watcher* watcher_new(oxo_proxy *p)
  */
 static void wh_on_error_handler(oxo_proxy *p,int flag)
 {
-    int f1,f2;
+    int left_flag,right_flag;
+    int left_io_flag,right_io_flag;
 
     switch (flag) {
     case PROXY_FLAG_LEFT_READ:
     case PROXY_FLAG_RIGHT_WRITE:
-        f1 = PROXY_FLAG_LEFT_READ;
-        f2 = PROXY_FLAG_RIGHT_WRITE;
+        left_flag = PROXY_FLAG_LEFT_READ;
+        right_flag = PROXY_FLAG_RIGHT_WRITE;
+        left_io_flag = IOF_READ;
+        right_io_flag = IOF_WRITE;
         break;
     case PROXY_FLAG_RIGHT_READ:
     case PROXY_FLAG_LEFT_WRITE:
-        f1 = PROXY_FLAG_RIGHT_READ;
-        f2 = PROXY_FLAG_LEFT_WRITE;
+        left_flag = PROXY_FLAG_LEFT_WRITE;
+        right_flag = PROXY_FLAG_RIGHT_READ;
+        left_io_flag = IOF_WRITE;
+        right_io_flag = IOF_READ;
 
         proxy_peer_shutdown(p, PROXY_FLAG_RIGHT_READ);
         proxy_peer_shutdown(p, PROXY_FLAG_LEFT_WRITE);
@@ -47,38 +52,29 @@ static void wh_on_error_handler(oxo_proxy *p,int flag)
     }
 
     /* shutdown both directions of one flow */
-    proxy_event_disable(p, f1);
-    proxy_event_disable(p, f2);
-    proxy_peer_shutdown(p, f1);
-    proxy_peer_shutdown(p, f2);
+    io_disable(p->left_io_data, left_io_flag);
+    io_disable(p->right_io_data, right_io_flag);
+    proxy_peer_shutdown(p, left_flag);
+    proxy_peer_shutdown(p, right_flag);
 }
 
-void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
+void wh_left_read_handler(io_data *data)
 {
     struct sockaddr_in addr;
     int s,n;
     char buff[PROXY_BUFFER_SIZE];
-    oxo_proxy *p = OXO_PROXY(watcher);
-
-    if (revents & EV_ERROR) {
-        wh_on_error_handler(p, PROXY_FLAG_LEFT_READ);
-        D_PROXY(p, "ioerror left read");
-        return;
-    }
+    oxo_proxy *p = (oxo_proxy*)data->ptr;
 
     if (PROXY_STATUS_LEFT_CONNECTED == p->status) {
         /* left connected in the first place
          * stop left watcher until right is connected */
-        proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
-        s = socket(AF_INET,SOCK_STREAM,0);
-        ev_io_init((ev_io*)p->right_read_watcher,wh_right_read_handler,s,EV_READ);
-        ev_io_init((ev_io*)p->right_write_watcher,wh_right_write_handler,s,EV_WRITE);
+        io_disable(data, IOF_READ);
+        s = socket(AF_INET,SOCK_STREAM,0); /* remote peer socket */
         bzero(&addr,sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr("127.0.0.1");
         addr.sin_port = htons(p->remote_port);
         set_socket_nonblock(s);
-        p->right_socket = s;
 
         puts("connecting right");
         D_PROXY(p, "connect");
@@ -86,8 +82,11 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
         connect(s,(struct sockaddr*)&addr,sizeof(addr));
 
         p->status = PROXY_STATUS_RIGHT_CONNECTING;
-        proxy_event_enable(p,PROXY_FLAG_RIGHT_READ);
-        proxy_event_enable(p,PROXY_FLAG_RIGHT_WRITE);
+        io_data *id = io_new_data(data->loop, s, &wh_right_read_handler, &wh_right_write_handler,0);
+        id->ptr = p;
+        p->right_io_data = id;
+
+        io_add(id,IOF_READ | IOF_WRITE);
     } else if (PROXY_STATUS_RIGHT_CONNECTING == p->status) {
         puts("error: should not come here when status is right connecting");
         D_PROXY(p, "error premature right connecting");
@@ -97,8 +96,7 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
         if (0 == remain) {
             /* buffer is full, previous data is pending,
              * enable right write to consume them */
-            proxy_event_enable(p, PROXY_FLAG_RIGHT_WRITE);
-            proxy_event_disable(p,PROXY_FLAG_LEFT_READ);
+            io_disable(p->right_io_data, IOF_READ | IOF_WRITE);
             return;
         }
 
@@ -114,7 +112,7 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
          * */
         remain = MIN(remain,PROXY_BUFFER_SIZE);
         while(1) {
-            n = recv(watcher->fd,buff,remain,0);
+            n = recv(data->fd,buff,remain,0);
             if (n < 0) {
                 if (EAGAIN == errno) {
                     /* no data now */
@@ -126,7 +124,7 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
             } else if (0 == n) {
                 // left peer shutdown
                 puts("left read shutdown, shutdown both directions");
-                proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
+                io_disable(p->left_io_data, IOF_READ);
                 proxy_peer_shutdown(p, PROXY_FLAG_LEFT_READ);
                 proxy_peer_shutdown(p, PROXY_FLAG_RIGHT_WRITE);
                 return;
@@ -134,18 +132,18 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
 
             sent = 0;
             while(n > sent) {
-                sn = send(p->right_socket,&buff[sent],n - sent,0);
+                sn = send(p->right_io_data->fd,&buff[sent],n - sent,0);
                 if (-1 == sn) {
                     if (EAGAIN == errno) {
                         /* socket can not catch up with us
                          * put pending data into buffer */
                         proxy_buffer_lr_put(p, &buff[sent], n - sent);
-                        proxy_event_enable(p, PROXY_FLAG_RIGHT_WRITE);
-                        proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
+                        io_enable(p->right_io_data, IOF_WRITE);
+                        io_disable(p->left_io_data, IOF_READ);
                         return;
                     }
                     D_PROXY(p,"ioerror right write");
-                    proxy_event_disable(p, PROXY_FLAG_LEFT_READ);
+                    io_disable(p->left_io_data, IOF_READ);
                     proxy_peer_shutdown(p, PROXY_FLAG_LEFT_READ);
                     proxy_peer_shutdown(p, PROXY_FLAG_RIGHT_WRITE);
                     return;
@@ -162,28 +160,22 @@ void wh_left_read_handler(EV_P_ ev_io *watcher,int revents)
  * and write is ready right now, so purge buffer keeping pending
  * data left by last failed write then disable write event.
  */
-void wh_left_write_handler(EV_P_ ev_io *watcher,int revents)
+void wh_left_write_handler(io_data *data)
 {
-    oxo_proxy *p = OXO_PROXY(watcher);
+    oxo_proxy *p = data->ptr;
     int pending,n,i = 0;
     char buff[PROXY_BUFFER_SIZE];
-
-    if (revents & EV_ERROR) {
-        wh_on_error_handler(p, PROXY_FLAG_LEFT_WRITE);
-        D_PROXY(p, "ioerror left write");
-        return;
-    }
 
     if (PROXY_STATUS_RIGHT_CONNECTED == p->status) {
         puts("lr write ready");
         pending = proxy_buffer_rl_get(p, buff, PROXY_BUFFER_SIZE);
         if (0 == pending) {
             puts("rl write with 0 pending bytes");
-            proxy_event_disable(p, PROXY_FLAG_LEFT_WRITE);
+            io_disable(p->left_io_data, IOF_WRITE);
             return;
         }
         while (pending > 0) {
-            n = send(watcher->fd,&buff[i],pending - i,0);
+            n = send(data->fd,&buff[i],pending - i,0);
             if (n < 0) {
                 if (EAGAIN == errno) {
                     /* TODO: put the data back */
@@ -197,8 +189,8 @@ void wh_left_write_handler(EV_P_ ev_io *watcher,int revents)
         }
 
         // flushed all pending buffer to socket buffer, disable EV_WRITE
-        proxy_event_disable(p, PROXY_FLAG_LEFT_WRITE);
-        proxy_event_enable(p,PROXY_FLAG_RIGHT_READ);
+        io_disable(p->left_io_data, IOF_WRITE);
+        io_enable(p->right_io_data, IOF_READ);
     }
 
 }
@@ -207,36 +199,30 @@ void wh_left_write_handler(EV_P_ ev_io *watcher,int revents)
  * similar with left read handler, read from one side and streams
  * it into the other side
  */
-void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
+void wh_right_read_handler(io_data *data)
 {
     int n,remain,sn,sent;
     char buff[PROXY_BUFFER_SIZE];
-    oxo_proxy *p = OXO_PROXY(watcher);
-
-    if (revents & EV_ERROR) {
-        wh_on_error_handler(p, PROXY_FLAG_RIGHT_READ);
-        D_PROXY(p, "ioerror right read");
-        return;
-    }
+    oxo_proxy *p = data->ptr;
 
     if (p->status == PROXY_STATUS_RIGHT_CONNECTING) {
         // notify left to read data in
         puts("notify left to read data");
-        proxy_event_enable(p, PROXY_FLAG_LEFT_READ);
+        io_enable(p->left_io_data, IOF_READ);
         p->status = PROXY_STATUS_RIGHT_CONNECTED;
     } else if (p->status == PROXY_STATUS_RIGHT_CONNECTED) {
         remain = proxy_buffer_rl_remain(p);
         if (remain == 0) {
             /* buffer is full, enable left write to consume them */
-            proxy_event_enable(p, PROXY_FLAG_LEFT_WRITE);
-            proxy_event_disable(p, PROXY_FLAG_RIGHT_READ);
+            io_enable(p->left_io_data, IOF_WRITE);
+            io_disable(p->right_io_data, IOF_READ);
             return;
         }
 
         puts("recv from right");
         remain = MIN(remain,PROXY_BUFFER_SIZE);
         while(1) {
-            n = recv(watcher->fd,buff,remain,0);
+            n = recv(data->fd,buff,remain,0);
             if (n < 0) {
                 if (EAGAIN == errno) {
                     return;
@@ -247,7 +233,7 @@ void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
             } else if (0 == n) {
                 // right peer shutdown
                 puts("right read shutdown, shutdown both directions");
-                proxy_event_disable(p, PROXY_FLAG_RIGHT_READ);
+                io_disable(p->right_io_data, IOF_READ);
                 proxy_peer_shutdown(p, PROXY_FLAG_RIGHT_READ);
                 proxy_peer_shutdown(p, PROXY_FLAG_LEFT_WRITE);
                 return;
@@ -255,12 +241,12 @@ void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
 
             sent = 0;
             while (n > sent) {
-                sn = send(p->left_socket,&buff[sent],n - sent,0);
+                sn = send(p->left_io_data->fd,&buff[sent],n - sent,0);
                 if (-1 == sn) {
                     if (EAGAIN == errno) {
                         proxy_buffer_rl_put(p, &buff[sent], n - sent);
-                        proxy_event_enable(p, PROXY_FLAG_LEFT_WRITE);
-                        proxy_event_disable(p, PROXY_FLAG_RIGHT_READ);
+                        io_enable(p->left_io_data, IOF_WRITE);
+                        io_disable(p->right_io_data, IOF_READ);
                         return;
                     }
                     D_PROXY(p, "ioerror left write");
@@ -277,34 +263,28 @@ void wh_right_read_handler(EV_P_ ev_io *watcher,int revents)
 /*
  * similar with left write, purge pending data to right side
  */
-void wh_right_write_handler(EV_P_ ev_io *watcher,int revents)
+void wh_right_write_handler(io_data *data)
 {
-    oxo_proxy *p = OXO_PROXY(watcher);
+    oxo_proxy *p = data->ptr;
     int pending,n,i = 0;
     char buff[PROXY_BUFFER_SIZE];
-
-    if (revents & EV_ERROR) {
-        wh_on_error_handler(p, PROXY_FLAG_RIGHT_WRITE);
-        D_PROXY(p, "ioerror right write");
-        return;
-    }
 
     if (p->status == PROXY_STATUS_RIGHT_CONNECTING) {
         /* notify left to read data in */
         puts("notify left to read data");
-        proxy_event_disable(p, PROXY_FLAG_RIGHT_WRITE);
-        proxy_event_enable(p, PROXY_FLAG_LEFT_READ);
+        io_disable(p->right_io_data, IOF_WRITE);
+        io_enable(p->left_io_data, IOF_READ);
         p->status = PROXY_STATUS_RIGHT_CONNECTED;
     } else if (PROXY_STATUS_RIGHT_CONNECTED == p->status) {
         pending = proxy_buffer_lr_get(p, buff, PROXY_BUFFER_SIZE);
         if (pending == 0) {
             puts("lr write with pending 0");
-            proxy_event_disable(p, PROXY_FLAG_RIGHT_WRITE);
+            io_disable(p->right_io_data, IOF_WRITE);
             return;
         }
         while (pending > 0) {
             printf("lr send with pending %d\n",pending);
-            n = send(watcher->fd,&buff[i],pending - i,0);
+            n = send(data->fd,&buff[i],pending - i,0);
             if (n < 0) {
                 if (EAGAIN == n) {
                     puts("lr write with eagain");
@@ -317,6 +297,6 @@ void wh_right_write_handler(EV_P_ ev_io *watcher,int revents)
             pending -= n;
         }
 
-        proxy_event_disable(p, PROXY_FLAG_RIGHT_WRITE);
+        io_disable(p->right_io_data, IOF_WRITE);
     }
 }

@@ -1,3 +1,4 @@
+#include "io.h"
 #include <ev.h>
 
 //#define MIN(x,y) ((x < y) ? x : y)
@@ -7,7 +8,7 @@ struct oxo_proxy;
 
 typedef struct oxo_proxy_watcher
 {
-    ev_io io;
+    io_data io;
     struct oxo_proxy *proxy;
 } oxo_proxy_watcher;
 
@@ -15,10 +16,10 @@ typedef struct oxo_proxy_watcher
 
 
 
-void wh_left_read_handler(EV_P_ ev_io *watcher,int revents);
-void wh_left_write_handler(EV_P_ ev_io *watcher,int revents);
-void wh_right_read_handler(EV_P_ ev_io *watcher,int revents);
-void wh_right_write_handler(EV_P_ ev_io *watcher,int revents);
+void wh_left_read_handler(io_data *data);
+void wh_left_write_handler(io_data *data);
+void wh_right_read_handler(io_data *data);
+void wh_right_write_handler(io_data *data);
 
 oxo_proxy_watcher *watcher_new(struct oxo_proxy *p);
 

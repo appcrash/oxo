@@ -1,3 +1,5 @@
+struct io_data;
+
 #define PROXY_DIR_LEFT_RIGHT 1
 #define PROXY_DIR_RIGHT_LEFT 2
 
@@ -19,15 +21,12 @@ struct oxo_proxy_watcher;
 typedef struct oxo_proxy {
     int local_port;
     int remote_port;
-    int left_socket;
-    int right_socket;
 
     char diagnose;
 
-    struct oxo_proxy_watcher *left_read_watcher;
-    struct oxo_proxy_watcher *left_write_watcher;
-    struct oxo_proxy_watcher *right_read_watcher;
-    struct oxo_proxy_watcher *right_write_watcher;
+    struct io_data *left_io_data;
+    struct io_data *right_io_data;
+
     int status;
     int socket_status;
     proxy_update_handler_t update_handler;
@@ -53,8 +52,6 @@ int proxy_start(oxo_proxy *p);
 void proxy_flow_update(int dir,char *data,int len);
 int proxy_buffer_lr_remain(oxo_proxy *p);
 int proxy_buffer_rl_remain(oxo_proxy *p);
-void proxy_event_enable(oxo_proxy *p,int flag);
-void proxy_event_disable(oxo_proxy *p,int flag);
 void proxy_peer_shutdown(oxo_proxy *p,int flag);
 
 int proxy_buffer_lr_get(oxo_proxy *p,char *data,unsigned int len);

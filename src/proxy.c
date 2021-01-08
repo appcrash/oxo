@@ -5,7 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <ev.h>
-
+#include "io.h"
 
 #include "common.h"
 #include "proxy.h"
@@ -34,38 +34,30 @@ oxo_proxy* proxy_new(int local_port,int remote_port) {
 
 
 
-void proxy_accpet_cb(EV_P_ ev_io *watcher, int revents) {
+void proxy_accpet_cb(io_data *data)
+{
     struct sockaddr_in addr;
     socklen_t addr_len;
     int s;
-    oxo_proxy *p = OXO_PROXY(watcher);
+    oxo_proxy *p = (oxo_proxy*)data->ptr;
 
-    if (revents & EV_ERROR) {
-        perror("error happened");
+    puts("accepting...");
+    s = accept(data->fd,(struct sockaddr*)&addr,&addr_len);
+
+    if (s < 0) {
+        perror("accept error");
         return;
     }
-    if (revents & EV_READ) {
-        puts("accepting...");
-        s = accept(watcher->fd,(struct sockaddr*)&addr,&addr_len);
+    D_PROXY(p, "accept");
 
-        if (s < 0) {
-            perror("accept error");
-            return;
-        }
-        D_PROXY(p, "accept");
+    set_socket_nonblock(s);
 
-        set_socket_nonblock(s);
+    p->status = PROXY_STATUS_LEFT_CONNECTED;
+    io_data *id = io_new_data(data->loop, s,&wh_left_read_handler,&wh_left_write_handler,0);
+    id->ptr = p;
+    p->left_io_data = id;
 
-        p->status = PROXY_STATUS_LEFT_CONNECTED;
-        p->left_socket = s;
-        p->left_read_watcher = watcher_new(p);
-        p->left_write_watcher = watcher_new(p);
-        p->right_read_watcher = watcher_new(p);
-        p->right_write_watcher = watcher_new(p);
-        ev_io_init((ev_io*)p->left_read_watcher, wh_left_read_handler, s,EV_READ);
-        ev_io_init((ev_io*)p->left_write_watcher, wh_left_write_handler, s, EV_WRITE);
-        proxy_event_enable(p, PROXY_FLAG_LEFT_READ);
-    }
+    io_add(id,IOF_READ);        /* only enable read */
 }
 
 
@@ -73,8 +65,6 @@ int proxy_start(oxo_proxy *p)
 {
     int s;
     struct sockaddr_in addr;
-    oxo_proxy_watcher watcher_accept;
-    struct ev_loop *loop = EV_DEFAULT;
 
     s = socket(AF_INET,SOCK_STREAM,0);
     bzero(&addr,sizeof(addr));
@@ -95,93 +85,55 @@ int proxy_start(oxo_proxy *p)
         return -1;
     }
 
-    watcher_accept.proxy = p;
-    ev_io_init((ev_io*)&watcher_accept, proxy_accpet_cb, s, EV_READ | EV_WRITE);
-    ev_io_start(loop, (ev_io*)&watcher_accept);
+    io_loop *loop = io_new_loop();
+    io_data *id = io_new_data(loop,s,&proxy_accpet_cb,0,0);
+    id->ptr = p;
 
-    ev_loop(loop,0);
+    if (io_add(id,IOF_READ) == -1) {
+        perror("io_add listen fd error");
+        close(s);
+        return -1;
+    }
+    io_loop_start(loop);
 
-    puts("ev_loop done");
+    puts("event loop done");
     return 0;
 }
 
 
-void proxy_event_enable(oxo_proxy *p,int flag)
-{
-    struct ev_loop *loop = EV_DEFAULT;
-    ev_io *io;
-
-    switch(flag) {
-    case PROXY_FLAG_LEFT_READ:
-        io = (ev_io*)p->left_read_watcher;
-        break;
-    case PROXY_FLAG_LEFT_WRITE:
-        io = (ev_io*)p->left_write_watcher;
-        break;
-    case PROXY_FLAG_RIGHT_READ:
-        io = (ev_io*)p->right_read_watcher;
-        break;
-    case PROXY_FLAG_RIGHT_WRITE:
-        io = (ev_io*)p->right_write_watcher;
-        break;
-    }
-
-    ev_io_start(loop, io);
-    p->socket_status |= flag;
-}
-
-void proxy_event_disable(oxo_proxy *p,int flag)
-{
-    struct ev_loop *loop = EV_DEFAULT;
-    ev_io *io;
-
-    switch(flag) {
-    case PROXY_FLAG_LEFT_READ:
-        io = (ev_io*)p->left_read_watcher;
-        break;
-    case PROXY_FLAG_LEFT_WRITE:
-        io = (ev_io*)p->left_write_watcher;
-        break;
-    case PROXY_FLAG_RIGHT_READ:
-        io = (ev_io*)p->right_read_watcher;
-        break;
-    case PROXY_FLAG_RIGHT_WRITE:
-        io = (ev_io*)p->right_write_watcher;
-        break;
-    }
-
-    ev_io_stop(loop, io);
-    p->socket_status &= ~flag;
-}
-
 void proxy_peer_shutdown(oxo_proxy *p,int flag)
 {
+    int lfd = p->left_io_data->fd;
+    int rfd = p->right_io_data->fd;
+
     switch(flag) {
     case PROXY_FLAG_LEFT_READ:
-        shutdown(((ev_io*)p->left_read_watcher)->fd,SHUT_RD);
+        shutdown(lfd,SHUT_RD);
         goto check_left;
     case PROXY_FLAG_LEFT_WRITE:
-        shutdown(((ev_io*)p->left_write_watcher)->fd,SHUT_WR);
+        shutdown(lfd,SHUT_WR);
         goto check_left;
     case PROXY_FLAG_RIGHT_READ:
-        shutdown(((ev_io*)p->right_read_watcher)->fd,SHUT_RD);
+        shutdown(rfd,SHUT_RD);
         goto check_right;
     case PROXY_FLAG_RIGHT_WRITE:
-        shutdown(((ev_io*)p->right_write_watcher)->fd,SHUT_WR);
+        shutdown(rfd,SHUT_WR);
         goto check_right;
     }
 
 check_left:
     if (!(p->socket_status & (PROXY_FLAG_LEFT_READ | PROXY_FLAG_LEFT_WRITE))) {
         puts("close left fd");
-        close(((ev_io*)p->left_read_watcher)->fd);
+        io_del(p->left_io_data);
+        close(lfd);
     }
     return;
 
 check_right:
     if (!(p->socket_status & (PROXY_FLAG_RIGHT_READ | PROXY_FLAG_RIGHT_WRITE))) {
         puts("close right fd");
-        close(((ev_io*)p->right_read_watcher)->fd);
+        io_del(p->right_io_data);
+        close(rfd);
     }
 
 }
