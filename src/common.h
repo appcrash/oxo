@@ -1,8 +1,6 @@
 #pragma once
 
 #include "io.h"
-#include <ev.h>
-
 //#define MIN(x,y) ((x < y) ? x : y)
 //#define MAX(x,y) ((x > y) ? x : y)
 
@@ -41,7 +39,6 @@ void diagnose_log(char *type,char *data);
 typedef int (*timer_callback_t)(void*);
 typedef struct oxo_timer
 {
-    ev_timer timer;
     timer_callback_t cb;
     void *data;
 } oxo_timer;
