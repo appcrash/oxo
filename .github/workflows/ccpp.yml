@@ -18,15 +18,15 @@ jobs:
     - name: make
       run: cd build && make
 
-  build-macos:
+  #build-macos:
 
-    runs-on: macos-latest
+    #runs-on: macos-latest
 
-    steps:
-    - uses: actions/checkout@v2
-    - name: configure
-      run: cmake -B build
-    - name: make
-      run: cd build && make
+    #steps:
+    #- uses: actions/checkout@v2
+    #- name: configure
+    #  run: cmake -B build
+    #- name: make
+    #  run: cd build && make
 
 

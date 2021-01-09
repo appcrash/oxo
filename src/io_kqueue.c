@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <sys/event.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include "io.h"
 
 io_data *io_new_data(io_loop *loop,int fd,io_handler_t on_read,
