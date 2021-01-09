@@ -13,6 +13,9 @@ typedef void (*timer_handler_t)(struct io_timer *timer);
 typedef struct io_loop
 {
     int fd;                     /* loop fd */
+#if defined(__FreeBSD__) || defined(__MACH__)
+    int new_timer_id;           /* identifier for new timer, self-increasing */
+#endif
 } io_loop;
 
 typedef struct io_data
