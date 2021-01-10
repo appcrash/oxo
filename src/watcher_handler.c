@@ -19,6 +19,33 @@ oxo_proxy_watcher* watcher_new(oxo_proxy *p)
     return watcher;
 }
 
+
+static void cancel_remote_connect(io_data *data)
+{
+    io_del(data);
+    close(data->fd);
+}
+
+static void wh_connect_timeout_handler(io_timer *timer)
+{
+    int value;
+    socklen_t len;
+    oxo_proxy *p = (oxo_proxy*)timer->io_data.ptr;
+    int remote_socket = p->right_io_data->fd;
+
+    puts("timeout handler...");
+    if (getsockopt(remote_socket, SOL_SOCKET, SO_ERROR, &value, &len) < 0) {
+        perror("getsockopt error when remote timeout");
+        cancel_remote_connect(p->right_io_data);
+        return;
+    }
+
+    if (value != 0) {
+        printf("connect timeout with sock error %d",value);
+        cancel_remote_connect(p->right_io_data);
+    }
+}
+
 /*
  * once proxy connection established, each of four directions(lr/rw) can
  * raise error due to all kinds of causes. the error handler just shutdown
@@ -73,21 +100,24 @@ void wh_left_read_handler(io_data *data)
         s = socket(AF_INET,SOCK_STREAM,0); /* remote peer socket */
         bzero(&addr,sizeof(addr));
         addr.sin_family = AF_INET;
-        addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        addr.sin_addr.s_addr = inet_addr("2.2.2.2");
         addr.sin_port = htons(p->remote_port);
         set_socket_nonblock(s);
 
         puts("connecting right");
         D_PROXY(p, "connect");
-        /* add timeout and retry, connect would return -1(errno:EINPROGRESS) for non-block socket */
+        /* connect would return -1(errno:EINPROGRESS) for non-block socket */
         connect(s,(struct sockaddr*)&addr,sizeof(addr));
 
         p->status = PROXY_STATUS_RIGHT_CONNECTING;
         io_data *id = io_new_data(data->loop, s, &wh_right_read_handler, &wh_right_write_handler,0);
         id->ptr = p;
         p->right_io_data = id;
-
         io_add(id,IOF_READ | IOF_WRITE);
+
+        io_timer *timeout_timer = io_new_timer(data->loop, &wh_connect_timeout_handler);
+        timeout_timer->io_data.ptr = p;
+        io_timer_start(timeout_timer, 2 * 1000L);
     } else if (PROXY_STATUS_RIGHT_CONNECTING == p->status) {
         puts("error: should not come here when status is right connecting");
         D_PROXY(p, "error premature right connecting");
@@ -167,6 +197,11 @@ void wh_left_write_handler(io_data *data)
     int pending,n,i = 0;
     char buff[PROXY_BUFFER_SIZE];
 
+    /*
+     * TODO: check socket error(getsockopt)
+     * this function is first called when remote connected
+     * or some error happaned which is not inspected
+     */
     if (PROXY_STATUS_RIGHT_CONNECTED == p->status) {
         puts("lr write ready");
         pending = proxy_buffer_rl_get(p, buff, PROXY_BUFFER_SIZE);
