@@ -5,7 +5,8 @@ set(CMAKE_C_STANDARD 99)
 
 
 set(SOURCES
-  main.c
+  acceptor.c
+  connector.c
   diagnose.c
   proxy.c
   util.c
@@ -23,7 +24,11 @@ endif()
 
 list(TRANSFORM SOURCES PREPEND "src/")
 
-add_executable(oxo ${SOURCES})
+add_library(oxolib OBJECT ${SOURCES})
+add_executable(oxoc $<TARGET_OBJECTS:oxolib> src/client.c)
+target_include_directories(oxoc PUBLIC include "/usr/local/include" "/usr/include")
+target_link_libraries(oxoc PUBLIC)
 
-target_include_directories(oxo PUBLIC include "/usr/local/include" "/usr/include")
-target_link_libraries(oxo PUBLIC)
+add_executable(oxos $<TARGET_OBJECTS:oxolib> src/server.c)
+target_include_directories(oxos PUBLIC include "/usr/local/include" "/usr/include")
+target_link_libraries(oxos PUBLIC)

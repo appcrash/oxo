@@ -7,4 +7,5 @@ Makefile
 cmake_install.cmake
 
 
-oxo
+oxoc
+oxos

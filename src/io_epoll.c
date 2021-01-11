@@ -127,6 +127,7 @@ void io_loop_start(io_loop *loop)
 static void _timer_timeout_callback(io_data *data)
 {
     io_timer *timer = (io_timer*)data;
+    io_del(data);
     if (timer->handler) {
         timer->handler(timer);
     }
