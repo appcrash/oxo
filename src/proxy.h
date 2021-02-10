@@ -1,6 +1,7 @@
 #pragma once
 
 struct io_data;
+struct io_loop;
 
 #define PROXY_DIR_LEFT_RIGHT 1
 #define PROXY_DIR_RIGHT_LEFT 2
@@ -16,8 +17,6 @@ struct io_data;
 
 #define PROXY_BUFFER_SIZE 4096
 
-typedef void (*proxy_update_handler_t)(int dir,char *data,int len);
-
 struct oxo_proxy_watcher;
 
 typedef struct oxo_proxy {
@@ -31,7 +30,6 @@ typedef struct oxo_proxy {
 
     int status;
     int socket_status;
-    proxy_update_handler_t update_handler;
 
     // circular buffer for left->right and right->left flows
     char lr_buffer[PROXY_BUFFER_SIZE];
@@ -41,6 +39,18 @@ typedef struct oxo_proxy {
     unsigned int rl_head,rl_count;
 
 } oxo_proxy;
+
+typedef void (*acceptor_handler)(io_loop *loop,int new_socket,void *handler_data);
+typedef struct oxo_accpt
+{
+    int local_port;
+    void *handler_data;
+    acceptor_handler on_new_connection;
+
+    struct io_loop *loop;
+} oxo_accpt;
+int accpt_start(oxo_accpt *accpt);
+
 
 typedef struct oxo_connect
 {

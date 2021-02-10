@@ -10,15 +10,6 @@
 #include "common.h"
 #include "proxy.h"
 
-void proxy_flow_update(int dir,char *data,int len) {
-    if (PROXY_DIR_RIGHT_LEFT == dir) {
-
-    } else if (PROXY_DIR_LEFT_RIGHT == dir) {
-
-    } else {
-
-    }
-}
 
 oxo_proxy* proxy_new(int local_port,int remote_port) {
     oxo_proxy* p = malloc(sizeof(oxo_proxy));
@@ -27,7 +18,6 @@ oxo_proxy* proxy_new(int local_port,int remote_port) {
     p->remote_port = remote_port;
     p->diagnose = 0;
     p->status = 0;
-    p->update_handler = proxy_flow_update;
 
     return p;
 }
