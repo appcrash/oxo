@@ -1,8 +1,15 @@
 #pragma once
 
+#include <stddef.h>
 #include "io.h"
-//#define MIN(x,y) ((x < y) ? x : y)
-//#define MAX(x,y) ((x > y) ? x : y)
+
+#ifndef MIN
+#define MIN(x,y) ((x < y) ? x : y)
+#endif
+
+#ifndef MAX
+#define MAX(x,y) ((x > y) ? x : y)
+#endif
 
 struct oxo_proxy;
 
@@ -14,6 +21,29 @@ typedef struct oxo_proxy_watcher
 
 #define OXO_PROXY(p_io) ((oxo_proxy_watcher*)p_io)->proxy
 
+/* circular buffer */
+typedef struct cbuf
+{
+    char *data;
+    int head,count,size;
+} cbuf;
+cbuf *cbuf_new(int size);
+void cbuf_free(cbuf *buf);
+int cbuf_in(cbuf *buf,char *data_in,int len);
+int cbuf_out(cbuf *buf,char *data_out,int len);
+
+/* single linked list */
+typedef struct list_node
+{
+    struct list_node *next;
+} list_node;
+#define list_container_of(node,type,member) \
+    ((type *)((char*)node - offsetof(type,member)))
+list_node *list_new();
+void list_free(list_node *node);
+list_node *list_next(list_node *node);
+void list_insert_after(list_node *prev,list_node *node);
+void list_delete_after(list_node *node); /* delete node after this one */
 
 
 void wh_left_read_handler(io_data *data);

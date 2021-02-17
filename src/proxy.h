@@ -40,15 +40,16 @@ typedef struct oxo_proxy {
 
 } oxo_proxy;
 
-typedef void (*acceptor_handler)(io_loop *loop,int new_socket,void *handler_data);
+typedef void (*accpt_handler)(struct io_loop *loop,int new_socket,void *handler_data);
 typedef struct oxo_accpt
 {
     int local_port;
     void *handler_data;
-    acceptor_handler on_new_connection;
+    accpt_handler on_new_connection;
 
     struct io_loop *loop;
 } oxo_accpt;
+oxo_accpt *accpt_new();
 int accpt_start(oxo_accpt *accpt);
 
 
@@ -61,7 +62,6 @@ typedef struct oxo_connect
 
 oxo_proxy* proxy_new(int local_port,int remote_port);
 int proxy_start(oxo_proxy *p);
-void proxy_flow_update(int dir,char *data,int len);
 int proxy_buffer_lr_remain(oxo_proxy *p);
 int proxy_buffer_rl_remain(oxo_proxy *p);
 void proxy_peer_shutdown(oxo_proxy *p,int flag);

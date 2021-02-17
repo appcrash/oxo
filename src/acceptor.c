@@ -30,6 +30,11 @@ static void accept_handler(io_data *data)
     accpt->on_new_connection(accpt->loop,s,accpt->handler_data);
 }
 
+oxo_accpt *accpt_new()
+{
+    return (oxo_accpt*)malloc(sizeof(oxo_accpt));
+}
+
 
 int accpt_start(oxo_accpt *accpt)
 {
@@ -58,6 +63,7 @@ int accpt_start(oxo_accpt *accpt)
     io_loop * loop = accpt->loop;
     io_data *id = io_new_data(loop, s, &accept_handler, 0, 0);
     id->ptr = accpt;
+    io_add(id, IOF_READ | IOF_WRITE);
 
     return 0;
 }
