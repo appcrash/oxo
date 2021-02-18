@@ -69,12 +69,12 @@ int main(int argc,char **argv) {
             exit(-1);
         }
     }
-    accpt = accpt_new();
-    accpt->loop = io_new_loop();
+    io_loop *loop = io_new_loop();
+    accpt = accpt_new(loop);
     accpt->local_port = local_port;
     accpt->on_new_connection = on_new_connection;
     accpt_start(accpt);
-    io_loop_start(accpt->loop);
+    io_loop_start(loop);
 
 
     /* p = proxy_new(local_port, remote_port); */

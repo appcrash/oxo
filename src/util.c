@@ -21,6 +21,11 @@ void set_socket_reuse(int s)
     }
 }
 
+void xlog(const char *str)
+{
+    puts(str);
+}
+
 /* circular buffer */
 cbuf *cbuf_new(int size)
 {

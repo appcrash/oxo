@@ -1,15 +1,19 @@
 #pragma once
 
+#include <stdio.h>
 #include <stddef.h>
+#include <sys/param.h>
 #include "io.h"
 
-#ifndef MIN
-#define MIN(x,y) ((x < y) ? x : y)
-#endif
+/* #ifndef MIN */
+/* #define MIN(x,y) ((x < y) ? x : y) */
+/* #endif */
 
-#ifndef MAX
-#define MAX(x,y) ((x > y) ? x : y)
-#endif
+/* #ifndef MAX */
+/* #define MAX(x,y) ((x > y) ? x : y) */
+/* #endif */
+
+
 
 struct oxo_proxy;
 
@@ -20,6 +24,10 @@ typedef struct oxo_proxy_watcher
 } oxo_proxy_watcher;
 
 #define OXO_PROXY(p_io) ((oxo_proxy_watcher*)p_io)->proxy
+
+/* simple logger */
+void xlog(const char *str);
+
 
 /* circular buffer */
 typedef struct cbuf
@@ -44,6 +52,26 @@ void list_free(list_node *node);
 list_node *list_next(list_node *node);
 void list_insert_after(list_node *prev,list_node *node);
 void list_delete_after(list_node *node); /* delete node after this one */
+
+/* state machine */
+struct oxo_sm;
+typedef struct oxo_event
+{
+    int state;
+    void *data;
+} oxo_event;
+typedef int (*transition_handler_t)(struct oxo_sm *sm,struct oxo_event *new_event);
+
+typedef struct oxo_sm
+{
+    transition_handler_t **transition; /* transition table (N x N) */
+    int max_state_type; /* equals to N */
+    int current_state;
+} oxo_sm;
+oxo_sm *sm_new(int init_state,int max_state_number);
+void sm_free(oxo_sm *sm);
+int sm_set_transition(oxo_sm *sm,int from_state,int to_state,transition_handler_t handler);
+void sm_iterate(oxo_sm *sm,oxo_event *new_event);
 
 
 void wh_left_read_handler(io_data *data);

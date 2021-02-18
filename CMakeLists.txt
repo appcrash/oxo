@@ -5,8 +5,7 @@ set(CMAKE_C_STANDARD 99)
 
 
 set(SOURCES
-  acceptor.c
-  connector.c
+  net.c
   diagnose.c
   proxy.c
   util.c

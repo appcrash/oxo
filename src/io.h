@@ -50,3 +50,32 @@ void io_loop_start(io_loop *loop); /* enter loop, wouldn't return until all done
 io_timer *io_new_timer(io_loop *loop,timer_handler_t handler);
 void io_timer_start(io_timer *timer,long timeout_ms);
 void io_timer_stop(io_timer *timer);
+
+typedef void (*accpt_handler_t)(struct io_loop *loop,int new_socket,void *handler_data);
+typedef struct oxo_accpt
+{
+    int local_port;
+    void *handler_data;
+    accpt_handler_t on_new_connection;
+
+    struct io_loop *loop;
+} oxo_accpt;
+oxo_accpt *accpt_new(struct io_loop *loop);
+int accpt_start(oxo_accpt *accpt);
+
+struct oxo_connector;
+typedef void (*connector_success_handler_t)(struct oxo_connector*);
+typedef void (*connector_timeout_handler_t)(struct oxo_connector*);
+typedef struct oxo_connector
+{
+    connector_success_handler_t on_success;
+    connector_timeout_handler_t on_timeout;
+
+    int socket;
+    struct io_loop *loop;
+    io_data *io_skdata;
+    io_timer *timer;
+} oxo_connector;
+oxo_connector *connector_new(struct io_loop *loop,connector_success_handler_t on_success,connector_timeout_handler_t on_timeout);
+void connector_free(oxo_connector *conn);
+void connector_start(oxo_connector *conn,char *ip,int port,long timeout_ms);
