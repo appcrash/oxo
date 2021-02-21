@@ -3,12 +3,12 @@
 #include <unistd.h>
 
 #include "common.h"
-#include "proxy.h"
 
 static int local_port = 0;
 static int remote_port = 0;
 static int diagnose_port = 0; // the port to receive diagnose udp msg
 
+extern void socks_on_new_connection(io_loop*,int);
 
 int parse_args(int argc,char **argv)
 {
@@ -47,14 +47,8 @@ int parse_args(int argc,char **argv)
 
 static void on_new_connection(io_loop *loop,int socket,void *data)
 {
-    oxo_proxy *p = (oxo_proxy*)data;
-
-    p->status = PROXY_STATUS_LEFT_CONNECTED;
-    io_data *id = io_new_data(loop, socket,&wh_left_read_handler,&wh_left_write_handler,0);
-    id->ptr = p;
-    p->left_io_data = id;
-
-    io_add(id,IOF_READ);        /* only enable read */
+    (void)data;
+    socks_on_new_connection(loop,socket);
 }
 
 
@@ -76,9 +70,5 @@ int main(int argc,char **argv) {
     accpt_start(accpt);
     io_loop_start(loop);
 
-
-    /* p = proxy_new(local_port, remote_port); */
-    /* p->diagnose = (diagnose_port > 0) ? 1 : 0; */
-    /* proxy_start(p); */
     return 0;
 }
