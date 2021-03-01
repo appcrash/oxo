@@ -7,10 +7,10 @@
 #include "common.h"
 #include "io.h"
 
-static const int CMD_CONNECT = 0x01;
-static const int ADDRTYPE_IPV4 = 0x01;
-static const int ADDRTYPE_DOMAIN = 0x03;
-static const int ADDRTYPE_IPV6 = 0x04;
+#define CMD_CONNECT 0x01
+#define ADDRTYPE_IPV4 0x01
+#define ADDRTYPE_DOMAIN 0x03
+#define ADDRTYPE_IPV6 0x04
 
 
 typedef struct sock_state
